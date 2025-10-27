@@ -14,6 +14,8 @@ type Tx struct {
 	config
 	// Message is the client for interacting with the Message builders.
 	Message *MessageClient
+	// UsersList is the client for interacting with the UsersList builders.
+	UsersList *UsersListClient
 
 	// lazily loaded.
 	client     *Client
@@ -146,6 +148,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Message = NewMessageClient(tx.config)
+	tx.UsersList = NewUsersListClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

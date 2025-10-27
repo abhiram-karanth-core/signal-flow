@@ -20,6 +20,18 @@ func (f MessageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MessageMutation", m)
 }
 
+// The UsersListFunc type is an adapter to allow the use of ordinary
+// function as UsersList mutator.
+type UsersListFunc func(context.Context, *ent.UsersListMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UsersListFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UsersListMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UsersListMutation", m)
+}
+
 // Condition is a hook condition function.
 type Condition func(context.Context, ent.Mutation) bool
 

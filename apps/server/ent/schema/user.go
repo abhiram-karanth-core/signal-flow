@@ -18,6 +18,7 @@ func (Message) Fields() []ent.Field {
         field.UUID("id", uuid.UUID{}).Default(uuid.New),   // Prisma uuid()
         field.String("text"),                              // Prisma String
         field.Time("created_at").Default(time.Now),        // Prisma DateTime @default(now())
+                       
     }
 }
 
@@ -25,3 +26,4 @@ func (Message) Fields() []ent.Field {
 func (Message) Edges() []ent.Edge {
     return nil
 }
+    

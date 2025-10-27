@@ -3,16 +3,22 @@
 import { useState, useRef, useEffect } from "react"
 import { useWebSocket } from "../context/SocketProvider"
 import styles from './page.module.css'
-
+import { useRouter } from "next/navigation"; 
 export default function Page() {
   const { messages, sendMessage, isConnected } = useWebSocket()
   const [message, setMessage] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null);
+    const router = useRouter(); 
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
-
+    useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login"); // redirect to login if not authenticated
+    }
+  }, [router]);
   useEffect(() => {
     scrollToBottom()
   }, [messages])

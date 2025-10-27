@@ -5,6 +5,7 @@ package ent
 import (
 	"server/ent/message"
 	"server/ent/schema"
+	"server/ent/userslist"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,4 +25,22 @@ func init() {
 	messageDescID := messageFields[0].Descriptor()
 	// message.DefaultID holds the default value on creation for the id field.
 	message.DefaultID = messageDescID.Default.(func() uuid.UUID)
+	userslistFields := schema.UsersList{}.Fields()
+	_ = userslistFields
+	// userslistDescUsername is the schema descriptor for username field.
+	userslistDescUsername := userslistFields[1].Descriptor()
+	// userslist.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
+	userslist.UsernameValidator = userslistDescUsername.Validators[0].(func(string) error)
+	// userslistDescEmail is the schema descriptor for email field.
+	userslistDescEmail := userslistFields[2].Descriptor()
+	// userslist.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	userslist.EmailValidator = userslistDescEmail.Validators[0].(func(string) error)
+	// userslistDescPassword is the schema descriptor for password field.
+	userslistDescPassword := userslistFields[3].Descriptor()
+	// userslist.PasswordValidator is a validator for the "password" field. It is called by the builders before save.
+	userslist.PasswordValidator = userslistDescPassword.Validators[0].(func(string) error)
+	// userslistDescID is the schema descriptor for id field.
+	userslistDescID := userslistFields[0].Descriptor()
+	// userslist.DefaultID holds the default value on creation for the id field.
+	userslist.DefaultID = userslistDescID.Default.(func() uuid.UUID)
 }

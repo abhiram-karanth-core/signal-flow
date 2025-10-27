@@ -12,6 +12,7 @@ import (
 	"server/ent/migrate"
 
 	"server/ent/message"
+	"server/ent/userslist"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -26,6 +27,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// Message is the client for interacting with the Message builders.
 	Message *MessageClient
+	// UsersList is the client for interacting with the UsersList builders.
+	UsersList *UsersListClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -38,6 +41,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Message = NewMessageClient(c.config)
+	c.UsersList = NewUsersListClient(c.config)
 }
 
 type (
@@ -128,9 +132,10 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:     ctx,
-		config:  cfg,
-		Message: NewMessageClient(cfg),
+		ctx:       ctx,
+		config:    cfg,
+		Message:   NewMessageClient(cfg),
+		UsersList: NewUsersListClient(cfg),
 	}, nil
 }
 
@@ -148,9 +153,10 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:     ctx,
-		config:  cfg,
-		Message: NewMessageClient(cfg),
+		ctx:       ctx,
+		config:    cfg,
+		Message:   NewMessageClient(cfg),
+		UsersList: NewUsersListClient(cfg),
 	}, nil
 }
 
@@ -180,12 +186,14 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	c.Message.Use(hooks...)
+	c.UsersList.Use(hooks...)
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	c.Message.Intercept(interceptors...)
+	c.UsersList.Intercept(interceptors...)
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -193,6 +201,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *MessageMutation:
 		return c.Message.mutate(ctx, m)
+	case *UsersListMutation:
+		return c.UsersList.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -331,12 +341,145 @@ func (c *MessageClient) mutate(ctx context.Context, m *MessageMutation) (Value, 
 	}
 }
 
+// UsersListClient is a client for the UsersList schema.
+type UsersListClient struct {
+	config
+}
+
+// NewUsersListClient returns a client for the UsersList from the given config.
+func NewUsersListClient(c config) *UsersListClient {
+	return &UsersListClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `userslist.Hooks(f(g(h())))`.
+func (c *UsersListClient) Use(hooks ...Hook) {
+	c.hooks.UsersList = append(c.hooks.UsersList, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `userslist.Intercept(f(g(h())))`.
+func (c *UsersListClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UsersList = append(c.inters.UsersList, interceptors...)
+}
+
+// Create returns a builder for creating a UsersList entity.
+func (c *UsersListClient) Create() *UsersListCreate {
+	mutation := newUsersListMutation(c.config, OpCreate)
+	return &UsersListCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UsersList entities.
+func (c *UsersListClient) CreateBulk(builders ...*UsersListCreate) *UsersListCreateBulk {
+	return &UsersListCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UsersListClient) MapCreateBulk(slice any, setFunc func(*UsersListCreate, int)) *UsersListCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UsersListCreateBulk{err: fmt.Errorf("calling to UsersListClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UsersListCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UsersListCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UsersList.
+func (c *UsersListClient) Update() *UsersListUpdate {
+	mutation := newUsersListMutation(c.config, OpUpdate)
+	return &UsersListUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UsersListClient) UpdateOne(_m *UsersList) *UsersListUpdateOne {
+	mutation := newUsersListMutation(c.config, OpUpdateOne, withUsersList(_m))
+	return &UsersListUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UsersListClient) UpdateOneID(id uuid.UUID) *UsersListUpdateOne {
+	mutation := newUsersListMutation(c.config, OpUpdateOne, withUsersListID(id))
+	return &UsersListUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UsersList.
+func (c *UsersListClient) Delete() *UsersListDelete {
+	mutation := newUsersListMutation(c.config, OpDelete)
+	return &UsersListDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UsersListClient) DeleteOne(_m *UsersList) *UsersListDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UsersListClient) DeleteOneID(id uuid.UUID) *UsersListDeleteOne {
+	builder := c.Delete().Where(userslist.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UsersListDeleteOne{builder}
+}
+
+// Query returns a query builder for UsersList.
+func (c *UsersListClient) Query() *UsersListQuery {
+	return &UsersListQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUsersList},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UsersList entity by its id.
+func (c *UsersListClient) Get(ctx context.Context, id uuid.UUID) (*UsersList, error) {
+	return c.Query().Where(userslist.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UsersListClient) GetX(ctx context.Context, id uuid.UUID) *UsersList {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UsersListClient) Hooks() []Hook {
+	return c.hooks.UsersList
+}
+
+// Interceptors returns the client interceptors.
+func (c *UsersListClient) Interceptors() []Interceptor {
+	return c.inters.UsersList
+}
+
+func (c *UsersListClient) mutate(ctx context.Context, m *UsersListMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UsersListCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UsersListUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UsersListUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UsersListDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UsersList mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Message []ent.Hook
+		Message, UsersList []ent.Hook
 	}
 	inters struct {
-		Message []ent.Interceptor
+		Message, UsersList []ent.Interceptor
 	}
 )

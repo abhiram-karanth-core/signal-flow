@@ -20,9 +20,23 @@ var (
 		Columns:    MessagesColumns,
 		PrimaryKey: []*schema.Column{MessagesColumns[0]},
 	}
+	// UsersListsColumns holds the columns for the "users_lists" table.
+	UsersListsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "username", Type: field.TypeString, Unique: true},
+		{Name: "email", Type: field.TypeString, Unique: true},
+		{Name: "password", Type: field.TypeString},
+	}
+	// UsersListsTable holds the schema information for the "users_lists" table.
+	UsersListsTable = &schema.Table{
+		Name:       "users_lists",
+		Columns:    UsersListsColumns,
+		PrimaryKey: []*schema.Column{UsersListsColumns[0]},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		MessagesTable,
+		UsersListsTable,
 	}
 )
 

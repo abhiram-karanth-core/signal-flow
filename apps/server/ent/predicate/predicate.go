@@ -8,3 +8,6 @@ import (
 
 // Message is the predicate function for message builders.
 type Message func(*sql.Selector)
+
+// UsersList is the predicate function for userslist builders.
+type UsersList func(*sql.Selector)

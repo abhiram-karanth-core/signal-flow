@@ -285,3 +285,16 @@
     padding: 0 0.5rem;
   }
 }
+.username {
+  font-weight: 600;
+  color: #3b82f6;
+  margin-bottom: 2px;
+  font-size: 0.9rem;
+}
+
+.timestamp {
+  font-size: 0.75rem;
+  color: #aaa;
+  text-align: right;
+  margin-top: 2px;
+}

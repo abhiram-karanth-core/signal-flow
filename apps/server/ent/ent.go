@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"server/ent/message"
+	"server/ent/userslist"
 	"sync"
 
 	"entgo.io/ent"
@@ -73,7 +74,8 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			message.Table: message.ValidColumn,
+			message.Table:   message.ValidColumn,
+			userslist.Table: userslist.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

@@ -15,30 +15,14 @@ import (
 	"github.com/coder/websocket"
 	"server/ent"
 	_ "github.com/lib/pq"
-
-
-	
+	"server/ent/userslist"
+	"golang.org/x/crypto/bcrypt"
+	"encoding/json"
 )
-
-// chatServer enables broadcasting to a set of subscribers.
 type chatServer struct {
-	// subscriberMessageBuffer controls the max number
-	// of messages that can be queued for a subscriber
-	// before it is kicked.
-	//
-	// Defaults to 16.
 	subscriberMessageBuffer int
-
-	// publishLimiter controls the rate limit applied to the publish endpoint.
-	//
-	// Defaults to one publish every 100ms with a burst of 8.
 	publishLimiter *rate.Limiter
-
-	// logf controls where logs are sent.
-	// Defaults to log.Printf.
 	logf func(f string, v ...any)
-
-	// serveMux routes the various endpoints to the appropriate handler.
 	serveMux http.ServeMux
 
 	subscribersMu sync.Mutex
@@ -55,7 +39,6 @@ func (cs *chatServer) listenRedis() {
         cs.publish([]byte(msg.Payload)) // Reuse existing in-memory broadcast
     }
 }
-
 // newChatServer constructs a chatServer with the defaults.
 func newChatServer() *chatServer {
     client, sub := SetupRedisClient()
@@ -83,20 +66,19 @@ func newChatServer() *chatServer {
         redisClient:             client,
         redisSub:                sub,
 		db:                      db,
-		producer: 			  prod,
+		producer: 			  	 prod,
 
 
 	}       
 	cs.serveMux.Handle("/", http.FileServer(http.Dir(".")))
 	cs.serveMux.HandleFunc("/subscribe", cs.subscribeHandler)
 	cs.serveMux.HandleFunc("/publish", cs.publishHandler)
+	cs.serveMux.HandleFunc("/signup", cs.signupHandler)
+	cs.serveMux.HandleFunc("/login", cs.loginHandler)
+
     go cs.listenRedis()
 	return cs
 }
-
-// subscriber represents a subscriber.
-// Messages are sent on the msgs channel and if the client
-// cannot keep up with the messages, closeSlow is called.
 type subscriber struct {
 	msgs      chan []byte
 	closeSlow func()
@@ -113,9 +95,6 @@ func (cs *chatServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	cs.serveMux.ServeHTTP(w, r)
 }
-
-// subscribeHandler accepts the WebSocket connection and then subscribes
-// it to all future messages.
 func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	err := cs.subscribe(w, r)
 	if errors.Is(err, context.Canceled) {
@@ -130,7 +109,6 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-// consumeToRedis reads from Kafka and forwards to Redis
 func (cs *chatServer) consumeToRedis() {
     consumer, err := NewKafkaConsumer("redis-consumer")
     if err != nil {
@@ -148,14 +126,12 @@ func (cs *chatServer) consumeToRedis() {
     }
 }
 
-// consumeToDB reads from Kafka and saves messages into Postgres
 func (cs *chatServer) consumeToDB() {
     consumer, err := NewKafkaConsumer("db-consumer")
     if err != nil {
         log.Fatalf("failed to create Kafka consumer: %v", err)
     }
     defer consumer.reader.Close()
-
     ctx := context.Background()
     err = consumer.Consume(ctx, func(msg string) error {
         log.Printf("Kafka → DB: %s", msg)
@@ -172,9 +148,6 @@ func (cs *chatServer) consumeToDB() {
         log.Printf("consumer error: %v", err)
     }
 }
-
-// publishHandler reads the request body with a limit of 8192 bytes and then publishes
-// the received message.
 func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -186,45 +159,14 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
 		return
 	}
-
-	// Log the received message
 	cs.logf("received messages: %s", string(msg))
-
-
-	// Save to DB
-	// _, err = cs.db.Message.
-	// 	Create().
-	// 	SetText(string(msg)).
-	// 	Save(r.Context())
-	// if err != nil {
-	// 	http.Error(w, "Failed to save message", http.StatusInternalServerError)
-	// 	return
-	// }
 	err = cs.producer.ProduceMessage(string(msg))
 	if err != nil {
 		http.Error(w, "Failed to produce message to Kafka", http.StatusInternalServerError)
 		return
 	}
-
-	// Still publish to Redis
-	// err = cs.redisClient.Publish(r.Context(), "my-channel", msg).Err()
-	// if err != nil {
-	// 	http.Error(w, "Failed to publish message", http.StatusInternalServerError)
-	// 	return
-	// }
-
-		
 		w.WriteHeader(http.StatusAccepted)
 	}
-
-// subscribe subscribes the given WebSocket to all broadcast messages.
-// It creates a subscriber with a buffered msgs chan to give some room to slower
-// connections and then registers the subscriber. It then listens for all messages
-// and writes them to the WebSocket. If the context is cancelled or
-// an error occurs, it returns and deletes the subscription.
-//
-// It uses CloseRead to keep reading from the connection to process control
-// messages and cancel the context if the connection drops.
 func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 	var mu sync.Mutex
 	var c *websocket.Conn
@@ -258,12 +200,10 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 	c = c2
 	mu.Unlock()
 	defer c.CloseNow()
-
 	ctx := c.CloseRead(context.Background())
-	  // **NEW: Send historical messages from DB**
-    messages, err := cs.db.Message.
+    messages, err := cs.db.Message.  // **NEW: Send historical messages from DB**
         Query().
-        Order(ent.Asc("id")).  // or use a created_at field
+        Order(ent.Asc("created_at")).  // or use a created_at field
         Limit(100).            // last 100 messages
         All(ctx)
     if err != nil {
@@ -276,7 +216,6 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
             }
         }
     }
-
 	for {
 		select {
 		case msg := <-s.msgs:
@@ -289,16 +228,10 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 }
-
-// publish publishes the msg to all subscribers.
-// It never blocks and so messages to slow subscribers
-// are dropped.
-func (cs *chatServer) publish(msg []byte) {
-	cs.subscribersMu.Lock()
-	defer cs.subscribersMu.Unlock()
-
+func (cs *chatServer) publish(msg []byte) {   // publish publishes the msg to all subscribers.
+	cs.subscribersMu.Lock()// It never blocks and so messages to slow subscribers
+	defer cs.subscribersMu.Unlock() // are dropped.
 	cs.publishLimiter.Wait(context.Background())
-
 	for s := range cs.subscribers {
 		select {
 		case s.msgs <- msg:
@@ -307,34 +240,105 @@ func (cs *chatServer) publish(msg []byte) {
 		}
 	}
 }
-
-// addSubscriber registers a subscriber.
 func (cs *chatServer) addSubscriber(s *subscriber) {
 	cs.subscribersMu.Lock()
 	cs.subscribers[s] = struct{}{}
 	cs.subscribersMu.Unlock()
 }
-
-// deleteSubscriber deletes the given subscriber.
 func (cs *chatServer) deleteSubscriber(s *subscriber) {
 	cs.subscribersMu.Lock()
 	delete(cs.subscribers, s)
 	cs.subscribersMu.Unlock()
 }
-
 func writeTimeout(ctx context.Context, timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-
 	return c.Write(ctx, websocket.MessageText, msg)
 }
+// signupHandler handles new user registration
+func (cs *chatServer) signupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type SignupRequest struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	var req SignupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Hash password
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		return
+	}
+
+	// Save user in database
+	_, err = cs.db.UsersList.
+		Create().
+		SetUsername(req.Username).
+		SetEmail(req.Email).
+		SetPassword(string(hashed)).
+		Save(context.Background())
+
+	if err != nil {
+		http.Error(w, "Error creating user: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"message": "User created successfully"}`))
+}
+
+// loginHandler verifies credentials
+func (cs *chatServer) loginHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type LoginRequest struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	user, err := cs.db.UsersList.
+		Query().
+		Where(userslist.EmailEQ(req.Email)).
+		Only(context.Background())
+
+	if err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)) != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message": "Login successful"}`))
+}
+
 
 func main() {
 	cs := newChatServer()
-	    // Consumer A: Kafka → Redis
     go cs.consumeToRedis()
-
-    // Consumer B: Kafka → Postgres
     go cs.consumeToDB()
 	log.Printf("starting server on :8080")
 	if err := http.ListenAndServe(":8080", cs); err != nil {
