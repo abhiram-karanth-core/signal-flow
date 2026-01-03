@@ -340,8 +340,8 @@ func main() {
 	cs := newChatServer()
     go cs.consumeToRedis()
     go cs.consumeToDB()
-	log.Printf("starting server on :8080")
-	if err := http.ListenAndServe(":8080", cs); err != nil {
+	log.Printf("starting server on :8888")
+	if err := http.ListenAndServe(":8888", cs); err != nil {
 		log.Fatalf("server exited: %v", err)
 	}
 }
