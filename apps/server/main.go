@@ -110,7 +110,7 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (cs *chatServer) consumeToRedis() {
-    consumer, err := NewKafkaConsumer("redis-consumer")
+    consumer, err := NewKafkaConsumer("redis-consumer-v2")
     if err != nil {
         log.Fatalf("failed to create Kafka consumer: %v", err)
     }
@@ -127,7 +127,7 @@ func (cs *chatServer) consumeToRedis() {
 }
 
 func (cs *chatServer) consumeToDB() {
-    consumer, err := NewKafkaConsumer("db-consumer")
+    consumer, err := NewKafkaConsumer("db-consumer-v2")
     if err != nil {
         log.Fatalf("failed to create Kafka consumer: %v", err)
     }

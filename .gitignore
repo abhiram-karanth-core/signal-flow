@@ -70,3 +70,19 @@ bin/
 # Ignore env files anywhere in the tree
 **/.env
 **/.env.*
+
+
+service.cert
+service.key
+credentials.json
+# ------------------------------------------------------
+# IDEs and Editors
+# ------------------------------------------------------
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+note.txt
+
+*.njsproj
+*.sln

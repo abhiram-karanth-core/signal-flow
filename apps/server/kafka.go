@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"os"
 	"time"
-
+	"log"
 	"github.com/segmentio/kafka-go"
-	"github.com/segmentio/kafka-go/sasl/plain"
 )
+
+/* ---------------- PRODUCER ---------------- */
 
 // KafkaProducer wraps a kafka.Writer instance
 type KafkaProducer struct {
@@ -20,42 +21,38 @@ type KafkaProducer struct {
 
 // NewKafkaProducer creates and connects a Kafka producer
 func NewKafkaProducer() (*KafkaProducer, error) {
+
 	// Load CA cert
 	caCert, err := os.ReadFile("ca.pem")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read CA cert: %w", err)
 	}
 
-	// Build CertPool
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to append CA cert to pool")
+		return nil, fmt.Errorf("failed to append CA cert")
 	}
 
-	// TLS config
+	// Load client certificate + key (Aiven Access cert/key)
+	clientCert, err := tls.LoadX509KeyPair("service.cert", "service.key")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client cert/key: %w", err)
+	}
+
 	tlsConfig := &tls.Config{
-		RootCAs:            certPool,
-		InsecureSkipVerify: false, // keep strict SSL verification
+		RootCAs:      certPool,
+		Certificates: []tls.Certificate{clientCert},
 	}
 
-	// SASL PLAIN mechanism
-	mech := plain.Mechanism{
-		Username: "avnadmin",
-		Password: "AVNS_cwbgHrtEW8p1qH_yj4L",
-	}
-
-	// Dialer with SASL & TLS
 	dialer := &kafka.Dialer{
-		Timeout:       10 * time.Second,
-		DualStack:     true,
-		TLS:           tlsConfig,
-		SASLMechanism: mech,
+		Timeout:   10 * time.Second,
+		DualStack: true,
+		TLS:       tlsConfig,
 	}
 
-	// Kafka writer
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{"kafka-35a1d5c4-dak222004-e707.b.aivencloud.com:12734"},
-		Topic:   "MESSAGES",
+		Brokers:  []string{"kafka-1ef455df-hayagriva899-adf2.g.aivencloud.com:25695"},
+		Topic:    "MESSAGES",
 		Balancer: &kafka.LeastBytes{},
 		Dialer:   dialer,
 	})
@@ -68,14 +65,10 @@ func (kp *KafkaProducer) ProduceMessage(message string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err := kp.writer.WriteMessages(ctx, kafka.Message{
+	return kp.writer.WriteMessages(ctx, kafka.Message{
 		Key:   []byte(fmt.Sprintf("message-%d", time.Now().UnixMilli())),
 		Value: []byte(message),
 	})
-	if err != nil {
-		return fmt.Errorf("failed to write message: %w", err)
-	}
-	return nil
 }
 
 // Close closes the Kafka producer
@@ -83,12 +76,15 @@ func (kp *KafkaProducer) Close() error {
 	return kp.writer.Close()
 }
 
+/* ---------------- CONSUMER ---------------- */
+
 type KafkaConsumer struct {
 	reader *kafka.Reader
 }
 
 // NewKafkaConsumer creates a Kafka consumer
 func NewKafkaConsumer(groupID string) (*KafkaConsumer, error) {
+
 	// Load CA cert
 	caCert, err := os.ReadFile("ca.pem")
 	if err != nil {
@@ -100,29 +96,30 @@ func NewKafkaConsumer(groupID string) (*KafkaConsumer, error) {
 		return nil, fmt.Errorf("failed to append CA cert")
 	}
 
-	tlsConfig := &tls.Config{
-		RootCAs:            certPool,
-		InsecureSkipVerify: false,
+	// Load client certificate + key
+	clientCert, err := tls.LoadX509KeyPair("service.cert", "service.key")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client cert/key: %w", err)
 	}
 
-	mech := plain.Mechanism{
-		Username: "avnadmin",
-		Password: "AVNS_cwbgHrtEW8p1qH_yj4L",
+	tlsConfig := &tls.Config{
+		RootCAs:      certPool,
+		Certificates: []tls.Certificate{clientCert},
 	}
 
 	dialer := &kafka.Dialer{
-		Timeout:       10 * time.Second,
-		DualStack:     true,
-		TLS:           tlsConfig,
-		SASLMechanism: mech,
+		Timeout:   10 * time.Second,
+		DualStack: true,
+		TLS:       tlsConfig,
 	}
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"kafka-35a1d5c4-dak222004-e707.b.aivencloud.com:12734"},
-		Topic:   "MESSAGES",
-		GroupID: groupID, // consumer group
-		Dialer:  dialer,
-	})
+    Brokers:    []string{"kafka-1ef455df-hayagriva899-adf2.g.aivencloud.com:25695"},
+    Topic:     "MESSAGES",
+  
+    StartOffset: kafka.FirstOffset, // 🔥 THIS IS THE FIX
+    Dialer:    dialer,
+})
 
 	return &KafkaConsumer{reader: reader}, nil
 }
@@ -130,13 +127,20 @@ func NewKafkaConsumer(groupID string) (*KafkaConsumer, error) {
 // Consume reads messages from Kafka
 func (kc *KafkaConsumer) Consume(ctx context.Context, handle func(msg string) error) error {
 	for {
-		m, err := kc.reader.ReadMessage(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to read message: %w", err)
-		}
+    m, err := kc.reader.ReadMessage(ctx)
+    if err != nil {
+        log.Println("Kafka read error (ignored):", err)
+        continue
+    }
 
-		if err := handle(string(m.Value)); err != nil {
-			return err
-		}
-	}
+    if err := handle(string(m.Value)); err != nil {
+        log.Println("handler error:", err)
+    }
+}
+
+}
+
+// Close closes the Kafka consumer
+func (kc *KafkaConsumer) Close() error {
+	return kc.reader.Close()
 }
