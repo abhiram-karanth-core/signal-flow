@@ -10,7 +10,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const res = await fetch("http://localhost:8080/login", {
+    const res = await fetch("http://localhost:8888/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
@@ -24,7 +24,7 @@ export default function LoginPage() {
 
     const data = await res.json();
     alert(data.message || "Login successful");
-    localStorage.setItem("token", "loggedin"); // future jwt implementation here.
+    localStorage.setItem("token", data.token); //impleted jwt here.
     router.push("/");
   };
 

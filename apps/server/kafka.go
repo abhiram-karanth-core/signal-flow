@@ -116,7 +116,7 @@ func NewKafkaConsumer(groupID string) (*KafkaConsumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
     Brokers:    []string{"kafka-1ef455df-hayagriva899-adf2.g.aivencloud.com:25695"},
     Topic:     "MESSAGES",
-  
+	GroupID:   groupID, // without groupid, it caused redundant message accumulation in the db each time the server restarts
     StartOffset: kafka.FirstOffset, //  THIS IS THE FIX
     Dialer:    dialer,
 })

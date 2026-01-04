@@ -65,9 +65,7 @@ export default function Page() {
               {messages.map((msg, index) => (
                 <div key={index} className={styles.messageBubble}>
                   <div className={styles.messageContent}>{msg}</div>
-                  {/* <div className={styles.messageTime}>
-                    {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div> */}
+                  
                 </div>
               ))}
               <div ref={messagesEndRef} />

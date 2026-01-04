@@ -18,6 +18,7 @@ import (
 	"server/ent/userslist"
 	"golang.org/x/crypto/bcrypt"
 	"encoding/json"
+	"github.com/golang-jwt/jwt/v5"
 )
 type chatServer struct {
 	subscriberMessageBuffer int
@@ -299,6 +300,8 @@ func (cs *chatServer) signupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // loginHandler verifies credentials
+var jwtSecret = []byte("secret_key") // need to move it to env later. for now i will hardcode it
+
 func (cs *chatServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -331,8 +334,24 @@ func (cs *chatServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Login successful"}`))
+	claims := jwt.MapClaims{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString(jwtSecret)
+	if err != nil {
+		http.Error(w, "Could not generate token", http.StatusInternalServerError)
+		return
+	}
+
+	//  send the token as json response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": signedToken,
+	})
 }
 
 
