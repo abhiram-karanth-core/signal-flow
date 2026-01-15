@@ -35,7 +35,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const connect = useCallback(() => {
     try {
       // Connect to your Go WebSocket server
-      const socket = new WebSocket("ws:https://global-chat-app-hnqw.onrender.com/subscribe");
+      const socket = new WebSocket("wss://global-chat-app-hnqw.onrender.com/subscribe");
 
       socket.onopen = () => {
         console.log("WebSocket connected");
