@@ -19,30 +19,51 @@ type KafkaProducer struct {
 	writer *kafka.Writer
 }
 
+func loadTLSConfig() (*tls.Config, error) {
+    // CA cert
+    caCert := os.Getenv("KAFKA_CA_CERT")
+    if caCert == "" {
+        return nil, fmt.Errorf("KAFKA_CA_CERT not set")
+    }
+
+    certPool := x509.NewCertPool()
+    if !certPool.AppendCertsFromPEM([]byte(caCert)) {
+        return nil, fmt.Errorf("failed to append CA cert")
+    }
+
+    // Client cert + key
+    certPEM := os.Getenv("KAFKA_CLIENT_CERT")
+    keyPEM  := os.Getenv("KAFKA_CLIENT_KEY")
+
+    if certPEM == "" || keyPEM == "" {
+        return nil, fmt.Errorf("KAFKA_CLIENT_CERT or KAFKA_CLIENT_KEY not set")
+    }
+
+    clientCert, err := tls.X509KeyPair(
+        []byte(certPEM),
+        []byte(keyPEM),
+    )
+    if err != nil {
+        return nil, fmt.Errorf("failed to load client cert/key: %w", err)
+    }
+
+    return &tls.Config{
+        RootCAs:      certPool,
+        Certificates: []tls.Certificate{clientCert},
+        MinVersion:   tls.VersionTLS12,
+    }, nil
+}
+
+
 // NewKafkaProducer creates and connects a Kafka producer
 func NewKafkaProducer() (*KafkaProducer, error) {
 
 	// Load CA cert
-	caCert, err := os.ReadFile("ca.pem")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read CA cert: %w", err)
-	}
+	tlsConfig, err := loadTLSConfig()
+    if err != nil {
+        return nil, err
+    }
 
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to append CA cert")
-	}
-
-	// Load client certificate + key (Aiven Access cert/key)
-	clientCert, err := tls.LoadX509KeyPair("service.cert", "service.key")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load client cert/key: %w", err)
-	}
-
-	tlsConfig := &tls.Config{
-		RootCAs:      certPool,
-		Certificates: []tls.Certificate{clientCert},
-	}
 
 	dialer := &kafka.Dialer{
 		Timeout:   10 * time.Second,
@@ -84,28 +105,11 @@ type KafkaConsumer struct {
 
 // NewKafkaConsumer creates a Kafka consumer
 func NewKafkaConsumer(groupID string) (*KafkaConsumer, error) {
+	tlsConfig, err := loadTLSConfig()
+    if err != nil {
+        return nil, err
+    }
 
-	// Load CA cert
-	caCert, err := os.ReadFile("ca.pem")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read CA cert: %w", err)
-	}
-
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to append CA cert")
-	}
-
-	// Load client certificate + key
-	clientCert, err := tls.LoadX509KeyPair("service.cert", "service.key")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load client cert/key: %w", err)
-	}
-
-	tlsConfig := &tls.Config{
-		RootCAs:      certPool,
-		Certificates: []tls.Certificate{clientCert},
-	}
 
 	dialer := &kafka.Dialer{
 		Timeout:   10 * time.Second,
