@@ -74,13 +74,12 @@ HTTP publish
 
 ## Deployment Notes
 
-- Kafka and PostgreSQL are managed using Aiven.
-- Local development connects to cloud services via TLS.
-- Monorepo managed using Yarn workspaces.
-- create a folder inside the apps/server, name it certs. place your ca.pem of you aiven postgres.
-- create a .env folder, place a your postgres dsn-> dsn = "example1324".
-- obtain service.cert and servie.key form the aiven kakfa and place it in apps/server.
-- obtain ca.pem from the aiven kafka and place it in apps/server.
+Kafka, Redis, and PostgreSQL are managed using Aiven
+Services are accessed securely over TLS
+Project is a monorepo managed with Yarn workspaces
+Environment Configuration
+All sensitive credentials and TLS materials are now stored entirely in environment variables.
+No certificate or key files (.pem, .cert, .key) are committed or required locally.
 
 ## Running the monorepo
 1) go to apps/server
@@ -89,6 +88,3 @@ HTTP publish
 4) go to root dir and run npm install
 5) run "yarn run dev"  in the root dir to start the monorepo
 
-### Troubleshooting
-If you encounter this error: "Error TS6053: File '@repo/typescript-config/nextjs.json' not found."
-just run : "npm install" in the root dir
