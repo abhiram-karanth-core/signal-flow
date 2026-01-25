@@ -74,12 +74,12 @@ HTTP publish
 
 ## Deployment Notes
 
-Kafka, Redis, and PostgreSQL are managed using Aiven
-Services are accessed securely over TLS
-Project is a monorepo managed with Yarn workspaces
-Environment Configuration
-All sensitive credentials and TLS materials are now stored entirely in environment variables.
-No certificate or key files (.pem, .cert, .key) are committed or required locally.
+# Kafka, Redis, and PostgreSQL are managed using Aiven
+# Services are accessed securely over TLS
+# Project is a monorepo managed with Yarn workspaces
+# Environment Configuration
+# All sensitive credentials and TLS materials are now stored entirely in environment variables.
+# No certificate or key files (.pem, .cert, .key) are committed or required locally.
 
 ## Running the monorepo
 1) go to apps/server

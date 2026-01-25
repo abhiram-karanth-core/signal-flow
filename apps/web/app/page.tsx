@@ -4,8 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useWebSocket } from "../context/SocketProvider"
 import styles from './page.module.css'
 import { useRouter } from "next/navigation";
-// import type { ChatMessage } from "../context/SocketProvider"
-
+import {toast} from "sonner"
 export default function Page() {
   const { messages, sendMessage, isConnected } = useWebSocket()
   const [message, setMessage] = useState("")
@@ -34,6 +33,7 @@ export default function Page() {
   }
   const handleLogout = () => {
   localStorage.removeItem("token");
+  toast.message("See you soon!")
   router.push("/login")
 };
 

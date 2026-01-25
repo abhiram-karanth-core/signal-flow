@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "../auth.module.css";
-
+import { toast } from "sonner";
 export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const router = useRouter();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     const res = await fetch("https://global-chat-app-hnqw.onrender.com/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -19,13 +18,13 @@ export default function LoginPage() {
 
     if (!res.ok) {
       const err = await res.text();
-      alert(err);
+      toast.error("Login failed");
       return;
     }
 
     const data = await res.json();
-    alert(data.message || "Login successful");
-    localStorage.setItem("token", data.token); //impleted jwt here.
+    localStorage.setItem("token", data.token); //impletemented jwt here.
+    toast.success("Login successful");
     router.push("/");
   };
 

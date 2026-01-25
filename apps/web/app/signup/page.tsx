@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "../auth.module.css";
+import { toast } from "sonner";
 
 export default function SignupPage() {
   const [form, setForm] = useState({ username: "", email: "", password: "" });
   const router = useRouter();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -19,13 +19,14 @@ export default function SignupPage() {
 
     if (!res.ok) {
       const err = await res.text();
-      alert(err);
+      toast.error( "Signup failed");
+
       return;
     }
 
-    const data = await res.json();
-    alert(data.message || "Signup successful");
-    router.push("/login"); // Fixed typo in path
+
+    toast.success("Signup successful");
+    router.push("/login");
   };
 
   return (
