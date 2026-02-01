@@ -1,17 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
-export default function HomePage() {
+export default function ChatIndexPage() {
   const router = useRouter()
   const [room, setRoom] = useState("")
 
   useEffect(() => {
     const token = localStorage.getItem("token")
-    if (!token) {
-      router.push("/login")
-    }
+    if (!token) router.push("/login")
   }, [router])
 
   const joinRoom = () => {
@@ -20,22 +18,14 @@ export default function HomePage() {
   }
 
   return (
-    <div style={{ padding: 40 }}>
-      <h1>Join a Chat Room</h1>
-
+    <div>
+      <h1>Join a chat room</h1>
       <input
         value={room}
         onChange={(e) => setRoom(e.target.value)}
-        placeholder="Enter room name"
+        placeholder="Room name"
       />
-
       <button onClick={joinRoom}>Join</button>
-
-      <hr />
-
-      <button onClick={() => router.push("/chat/global")}>
-        Join Global Chat
-      </button>
     </div>
   )
 }
