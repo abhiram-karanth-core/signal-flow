@@ -26,11 +26,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <WebSocketProvider>
+
           <Toaster position="top-right" richColors />
           <Analytics/>
           {children}
-        </WebSocketProvider>
+ 
       </body>
     </html >
   );
