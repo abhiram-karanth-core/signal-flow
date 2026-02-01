@@ -1,40 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Modern Light Theme (Zinc + Teal) */
-  --background: #ffffff;
-  --foreground: #09090b;
-  /* Zinc-950 */
-  --card: #ffffff;
-  --card-foreground: #09090b;
-  --popover: #ffffff;
-  --popover-foreground: #09090b;
-  --primary: #0d9488;
-  /* Teal-600 */
+  /* Minimal Performance Theme - No Fancy Stuff */
+  --background: #0d1117;
+  --foreground: #e6edf3;
+
+  --primary: #2f81f7;
+  --primary-hover: #1f6feb;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
-  /* Zinc-100 */
-  --secondary-foreground: #18181b;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  /* Zinc-500 */
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
-  --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
-  --border: #e4e4e7;
-  /* Zinc-200 */
-  --input: #e4e4e7;
-  --ring: #0d9488;
-  --radius: 0.5rem;
+
+  --secondary: #6e7681;
+  --secondary-hover: #8b949e;
+
+  --border: #30363d;
+  --border-hover: #484f58;
+
+  --input-bg: #0d1117;
+  --input-border: #30363d;
+
+  --muted: #6e7681;
+  --destructive: #f85149;
+
+  --radius: 6px;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -48,4 +45,23 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* Minimal Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
 }
