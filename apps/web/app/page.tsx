@@ -1,17 +1,15 @@
 "use client"
-
-import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import styles from "./rooms.module.css"
 
-export default function HomePage() {
-  const router = useRouter()
+export default function RoomsPage() {
   const [room, setRoom] = useState("")
+  const router = useRouter()
 
   useEffect(() => {
     const token = localStorage.getItem("token")
-    if (!token) {
-      router.push("/login")
-    }
+    if (!token) router.push("/login")
   }, [router])
 
   const joinRoom = () => {
@@ -20,22 +18,36 @@ export default function HomePage() {
   }
 
   return (
-    <div style={{ padding: 40 }}>
-      <h1>Join a Chat Room</h1>
+    <div className={styles.container}>
+      <div className={styles.content}>
+        <h1 className={styles.title}>Join a Room</h1>
+        <p className={styles.subtitle}>Connect with others in real-time chat</p>
 
-      <input
-        value={room}
-        onChange={(e) => setRoom(e.target.value)}
-        placeholder="Enter room name"
-      />
+        <div className={styles.card}>
+          <div className={styles.inputContainer}>
+            <input
+              className={styles.input}
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              placeholder="Enter room name"
+              onKeyPress={(e) => e.key === 'Enter' && joinRoom()}
+            />
+            <button className={styles.joinButton} onClick={joinRoom}>
+              Join
+            </button>
+          </div>
 
-      <button onClick={joinRoom}>Join</button>
+          <div className={styles.divider}>OR</div>
 
-      <hr />
-
-      <button onClick={() => router.push("/chat/global")}>
-        Join Global Chat
-      </button>
+          <button
+            className={styles.globalButton}
+            onClick={() => router.push("/chat/global")}
+          >
+            <span className={styles.icon}>🌍</span>
+            Join Global Chat
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
