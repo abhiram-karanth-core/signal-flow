@@ -30,7 +30,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ roomId, ch
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isConnected, setIsConnected] = useState(false);
   const ws = useRef<WebSocket | null>(null);
-  const reconnectTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
+ const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const connect = useCallback(() => {
     if (!roomId) return

@@ -9,7 +9,7 @@ export default function LoginPage() {
   const router = useRouter();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const res = await fetch("https://global-chat-app-hnqw.onrender.com/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -25,7 +25,8 @@ export default function LoginPage() {
     const data = await res.json();
     localStorage.setItem("token", data.token); //impletemented jwt here.
     toast.success("Login successful");
-    router.push("/");
+    router.push("/rooms")
+
   };
 
   return (
