@@ -4,18 +4,15 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"server/ent"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/time/rate"
 
 	"encoding/json"
 	"server/ent/message"
@@ -28,32 +25,16 @@ import (
 )
 
 type chatServer struct {
-	subscriberMessageBuffer int
-	publishLimiter          *rate.Limiter
-	logf                    func(f string, v ...any)
-	serveMux                http.ServeMux
-
-	subscribersMu sync.Mutex
-	subscribers   map[string]map[*subscriber]struct{}
-	redisClient   *redis.Client
-	redisSub      *redis.PubSub
-	db            *ent.Client
-	producer      *KafkaProducer
-}
-
-func (cs *chatServer) listenRedis() {
-	ch := cs.redisSub.Channel()
-	for msg := range ch {
-		cs.logf("received message from Redis: %s", msg.Payload)
-		var m models.ChatMessage
-		json.Unmarshal([]byte(msg.Payload), &m)
-		cs.publish(m.RoomID, []byte(msg.Payload))
-	}
+	logf        func(f string, v ...any)
+	serveMux    http.ServeMux
+	redisClient *redis.Client
+	db          *ent.Client
+	producer    *KafkaProducer
 }
 
 // newChatServer constructs a chatServer with the defaults.
 func newChatServer() *chatServer {
-	client, sub := SetupRedisClient()
+	client, _ := SetupRedisClient()
 	// Load DSN
 	_ = godotenv.Load()
 	dsn := os.Getenv("dsn")
@@ -71,14 +52,10 @@ func newChatServer() *chatServer {
 		log.Fatalf("failed to create Kafka producer: %v", err)
 	}
 	cs := &chatServer{
-		subscriberMessageBuffer: 16,
-		logf:                    log.Printf,
-		subscribers:             make(map[string]map[*subscriber]struct{}),
-		publishLimiter:          rate.NewLimiter(rate.Every(time.Millisecond*100), 8),
-		redisClient:             client,
-		redisSub:                sub,
-		db:                      db,
-		producer:                prod,
+		logf:        log.Printf,
+		redisClient: client,
+		db:          db,
+		producer:    prod,
 	}
 	cs.serveMux.Handle("/", http.FileServer(http.Dir(".")))
 	cs.serveMux.HandleFunc("/subscribe", cs.subscribeHandler)
@@ -86,13 +63,7 @@ func newChatServer() *chatServer {
 	cs.serveMux.HandleFunc("/signup", cs.signupHandler)
 	cs.serveMux.HandleFunc("/login", cs.loginHandler)
 
-	go cs.listenRedis()
 	return cs
-}
-
-type subscriber struct {
-	msgs      chan []byte
-	closeSlow func()
 }
 
 func (cs *chatServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -263,42 +234,19 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
-	var mu sync.Mutex
-	var c *websocket.Conn
-	var closed bool
+
 	roomID := r.URL.Query().Get("room_id")
 	if roomID == "" {
 		return errors.New("room_id is required")
 	}
-	s := &subscriber{
-		msgs: make(chan []byte, cs.subscriberMessageBuffer),
-		closeSlow: func() {
-			mu.Lock()
-			defer mu.Unlock()
-			closed = true
-			if c != nil {
-				c.Close(websocket.StatusPolicyViolation, "connection too slow to keep up with messages")
-			}
-		},
-	}
-	cs.addSubscriber(roomID, s)
-	defer cs.deleteSubscriber(roomID, s)
-
-	c2, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Allow all origins for development; tighten in production
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
 	})
 	if err != nil {
 		return err
 	}
-	mu.Lock()
-	if closed {
-		mu.Unlock()
-		return net.ErrClosed
-	}
-	c = c2
-	mu.Unlock()
 	defer c.CloseNow()
+
 	ctx := c.CloseRead(context.Background())
 	messages, err := cs.db.Message. //  Send historical messages from DB
 					Query().
@@ -325,48 +273,27 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 		}
 
 	}
+	pubsub := cs.redisClient.Subscribe(ctx, "room:"+roomID)
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+
 	for {
 		select {
-		case msg := <-s.msgs:
-			err := writeTimeout(ctx, time.Second*5, c, msg)
-			if err != nil {
+		case msg := <-ch:
+			if err := writeTimeout(
+				ctx,
+				time.Second*5,
+				c,
+				[]byte(msg.Payload),
+			); err != nil {
 				return err
 			}
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-}
-func (cs *chatServer) publish(roomID string, msg []byte) { // publish publishes the msg to all subscribers.
-	cs.subscribersMu.Lock()         // It never blocks and so messages to slow subscribers
-	defer cs.subscribersMu.Unlock() // are dropped.
-	cs.publishLimiter.Wait(context.Background())
-	for s := range cs.subscribers[roomID] {
-		select {
-		case s.msgs <- msg:
-		default:
-			go s.closeSlow()
-		}
-	}
-}
-func (cs *chatServer) addSubscriber(roomID string, s *subscriber) {
-	cs.subscribersMu.Lock()
-	defer cs.subscribersMu.Unlock()
 
-	if cs.subscribers[roomID] == nil {
-		cs.subscribers[roomID] = make(map[*subscriber]struct{})
-	}
-	cs.subscribers[roomID][s] = struct{}{}
-}
-
-func (cs *chatServer) deleteSubscriber(roomID string, s *subscriber) {
-	cs.subscribersMu.Lock()
-	defer cs.subscribersMu.Unlock()
-
-	delete(cs.subscribers[roomID], s)
-	if len(cs.subscribers[roomID]) == 0 {
-		delete(cs.subscribers, roomID)
-	}
 }
 
 func writeTimeout(ctx context.Context, timeout time.Duration, c *websocket.Conn, msg []byte) error {
