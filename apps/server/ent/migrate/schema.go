@@ -32,7 +32,6 @@ var (
 	// UsersListsColumns holds the columns for the "users_lists" table.
 	UsersListsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
-		{Name: "room_id", Type: field.TypeString},
 		{Name: "username", Type: field.TypeString, Unique: true},
 		{Name: "email", Type: field.TypeString, Unique: true},
 		{Name: "password", Type: field.TypeString},

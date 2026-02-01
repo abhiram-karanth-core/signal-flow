@@ -27,20 +27,6 @@ func (_u *UsersListUpdate) Where(ps ...predicate.UsersList) *UsersListUpdate {
 	return _u
 }
 
-// SetRoomID sets the "room_id" field.
-func (_u *UsersListUpdate) SetRoomID(v string) *UsersListUpdate {
-	_u.mutation.SetRoomID(v)
-	return _u
-}
-
-// SetNillableRoomID sets the "room_id" field if the given value is not nil.
-func (_u *UsersListUpdate) SetNillableRoomID(v *string) *UsersListUpdate {
-	if v != nil {
-		_u.SetRoomID(*v)
-	}
-	return _u
-}
-
 // SetUsername sets the "username" field.
 func (_u *UsersListUpdate) SetUsername(v string) *UsersListUpdate {
 	_u.mutation.SetUsername(v)
@@ -117,11 +103,6 @@ func (_u *UsersListUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UsersListUpdate) check() error {
-	if v, ok := _u.mutation.RoomID(); ok {
-		if err := userslist.RoomIDValidator(v); err != nil {
-			return &ValidationError{Name: "room_id", err: fmt.Errorf(`ent: validator failed for field "UsersList.room_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := userslist.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "UsersList.username": %w`, err)}
@@ -152,9 +133,6 @@ func (_u *UsersListUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
-	if value, ok := _u.mutation.RoomID(); ok {
-		_spec.SetField(userslist.FieldRoomID, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(userslist.FieldUsername, field.TypeString, value)
 	}
@@ -182,20 +160,6 @@ type UsersListUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *UsersListMutation
-}
-
-// SetRoomID sets the "room_id" field.
-func (_u *UsersListUpdateOne) SetRoomID(v string) *UsersListUpdateOne {
-	_u.mutation.SetRoomID(v)
-	return _u
-}
-
-// SetNillableRoomID sets the "room_id" field if the given value is not nil.
-func (_u *UsersListUpdateOne) SetNillableRoomID(v *string) *UsersListUpdateOne {
-	if v != nil {
-		_u.SetRoomID(*v)
-	}
-	return _u
 }
 
 // SetUsername sets the "username" field.
@@ -287,11 +251,6 @@ func (_u *UsersListUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UsersListUpdateOne) check() error {
-	if v, ok := _u.mutation.RoomID(); ok {
-		if err := userslist.RoomIDValidator(v); err != nil {
-			return &ValidationError{Name: "room_id", err: fmt.Errorf(`ent: validator failed for field "UsersList.room_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := userslist.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "UsersList.username": %w`, err)}
@@ -338,9 +297,6 @@ func (_u *UsersListUpdateOne) sqlSave(ctx context.Context) (_node *UsersList, er
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.RoomID(); ok {
-		_spec.SetField(userslist.FieldRoomID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(userslist.FieldUsername, field.TypeString, value)
