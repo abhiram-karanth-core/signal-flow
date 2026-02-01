@@ -16,6 +16,7 @@ type UsersList struct {
 func (UsersList) Fields() []ent.Field {
     return []ent.Field{
         field.UUID("id", uuid.UUID{}).Default(uuid.New),
+        field.String("room_id").NotEmpty(),
         field.String("username").NotEmpty().Unique(),
         field.String("email").NotEmpty().Unique(),
         field.String("password").NotEmpty(),

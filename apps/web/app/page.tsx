@@ -4,9 +4,13 @@ import { useState, useRef, useEffect } from "react"
 import { useWebSocket } from "../context/SocketProvider"
 import styles from './page.module.css'
 import { useRouter } from "next/navigation";
-import {toast} from "sonner"
+import { useSearchParams } from "next/navigation"
+import { toast } from "sonner"
 export default function Page() {
+  const searchParams = useSearchParams()
+  const roomId = searchParams.get("room")
   const { messages, sendMessage, isConnected } = useWebSocket()
+
   const [message, setMessage] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -28,15 +32,22 @@ export default function Page() {
     e.preventDefault()
     if (message.trim() && isConnected) {
       sendMessage(message)
+
       setMessage("")
     }
   }
   const handleLogout = () => {
-  localStorage.removeItem("token");
-  toast.message("See you soon!")
-  router.push("/login")
-};
+    localStorage.removeItem("token");
+    toast.message("See you soon!")
+    router.push("/login")
+  };
 
+  useEffect(() => {
+    if (!roomId) {
+      toast.error("Room ID missing")
+      router.push("/")
+    }
+  }, [roomId, router])
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -48,25 +59,24 @@ export default function Page() {
     <div className={styles.container}>
       {/* Header */}
       <header className={styles.header}>
-  <div className={styles.headerContent}>
-    <h1 className={styles.title}>Global Chat</h1>
+        <div className={styles.headerContent}>
+          <h1 className={styles.title}>Global Chat</h1>
 
-    <div className={styles.headerRight}>
-      <div className={styles.connectionStatus}>
-        <div
-          className={`${styles.statusDot} ${
-            isConnected ? styles.connected : styles.disconnected
-          }`}
-        />
-        <span>{isConnected ? "Connected" : "Disconnected"}</span>
-      </div>
+          <div className={styles.headerRight}>
+            <div className={styles.connectionStatus}>
+              <div
+                className={`${styles.statusDot} ${isConnected ? styles.connected : styles.disconnected
+                  }`}
+              />
+              <span>{isConnected ? "Connected" : "Disconnected"}</span>
+            </div>
 
-      <button onClick={handleLogout} className={styles.logoutButton}>
-        Logout
-      </button>
-    </div>
-  </div>
-</header>
+            <button onClick={handleLogout} className={styles.logoutButton}>
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
 
 
       {/* Messages Container */}

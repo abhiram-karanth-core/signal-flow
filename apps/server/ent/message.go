@@ -18,6 +18,8 @@ type Message struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID uuid.UUID `json:"id,omitempty"`
+	// RoomID holds the value of the "room_id" field.
+	RoomID string `json:"room_id,omitempty"`
 	// Username holds the value of the "username" field.
 	Username string `json:"username,omitempty"`
 	// Text holds the value of the "text" field.
@@ -32,7 +34,7 @@ func (*Message) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case message.FieldUsername, message.FieldText:
+		case message.FieldRoomID, message.FieldUsername, message.FieldText:
 			values[i] = new(sql.NullString)
 		case message.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -58,6 +60,12 @@ func (_m *Message) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value != nil {
 				_m.ID = *value
+			}
+		case message.FieldRoomID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field room_id", values[i])
+			} else if value.Valid {
+				_m.RoomID = value.String
 			}
 		case message.FieldUsername:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -113,6 +121,9 @@ func (_m *Message) String() string {
 	var builder strings.Builder
 	builder.WriteString("Message(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("room_id=")
+	builder.WriteString(_m.RoomID)
+	builder.WriteString(", ")
 	builder.WriteString("username=")
 	builder.WriteString(_m.Username)
 	builder.WriteString(", ")

@@ -263,12 +263,12 @@ func (_q *UsersListQuery) Clone() *UsersListQuery {
 // Example:
 //
 //	var v []struct {
-//		Username string `json:"username,omitempty"`
+//		RoomID string `json:"room_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.UsersList.Query().
-//		GroupBy(userslist.FieldUsername).
+//		GroupBy(userslist.FieldRoomID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *UsersListQuery) GroupBy(field string, fields ...string) *UsersListGroupBy {
@@ -286,11 +286,11 @@ func (_q *UsersListQuery) GroupBy(field string, fields ...string) *UsersListGrou
 // Example:
 //
 //	var v []struct {
-//		Username string `json:"username,omitempty"`
+//		RoomID string `json:"room_id,omitempty"`
 //	}
 //
 //	client.UsersList.Query().
-//		Select(userslist.FieldUsername).
+//		Select(userslist.FieldRoomID).
 //		Scan(ctx, &v)
 func (_q *UsersListQuery) Select(fields ...string) *UsersListSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

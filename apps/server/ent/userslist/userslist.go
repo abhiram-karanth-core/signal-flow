@@ -12,6 +12,8 @@ const (
 	Label = "users_list"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldRoomID holds the string denoting the room_id field in the database.
+	FieldRoomID = "room_id"
 	// FieldUsername holds the string denoting the username field in the database.
 	FieldUsername = "username"
 	// FieldEmail holds the string denoting the email field in the database.
@@ -25,6 +27,7 @@ const (
 // Columns holds all SQL columns for userslist fields.
 var Columns = []string{
 	FieldID,
+	FieldRoomID,
 	FieldUsername,
 	FieldEmail,
 	FieldPassword,
@@ -41,6 +44,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// RoomIDValidator is a validator for the "room_id" field. It is called by the builders before save.
+	RoomIDValidator func(string) error
 	// UsernameValidator is a validator for the "username" field. It is called by the builders before save.
 	UsernameValidator func(string) error
 	// EmailValidator is a validator for the "email" field. It is called by the builders before save.
@@ -57,6 +62,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByRoomID orders the results by the room_id field.
+func ByRoomID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRoomID, opts...).ToFunc()
 }
 
 // ByUsername orders the results by the username field.

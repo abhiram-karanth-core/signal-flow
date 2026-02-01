@@ -2,14 +2,15 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 interface WebSocketProviderProps {
+  roomId: string
   children?: React.ReactNode;
 }
-
 interface IWebSocketContext {
   sendMessage: (msg: string) => void;
   messages: ChatMessage[];
   isConnected: boolean;
 }
+
 type ChatMessage = {
   id?: string
   username: string
@@ -25,20 +26,21 @@ export const useWebSocket = () => {
   return state;
 };
 
-export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
+export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ roomId, children }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-
   const [isConnected, setIsConnected] = useState(false);
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const connect = useCallback(() => {
+    if (!roomId) return
     try {
       // Connect to your Go WebSocket server
-      const socket = new WebSocket("wss://global-chat-app-hnqw.onrender.com/subscribe");
+      const socket = new WebSocket(`wss://global-chat-app-hnqw.onrender.com/subscribe?room_id=${roomId}`);
 
       socket.onopen = () => {
-        console.log("WebSocket connected");
+        console.log("WebSocket connected", roomId);
+        setMessages([])
         setIsConnected(true);
       };
 
@@ -46,13 +48,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         try {
           const data = JSON.parse(event.data) as ChatMessage;
 
-          setMessages((prev) => [...prev, data]);
+          setMessages(prev =>
+            prev.some(m => m.id === data.id) ? prev : [...prev, data]
+          )
         } catch (err) {
           console.error("Invalid WebSocket message:", event.data);
         }
       };
-
-
       socket.onerror = (error) => {
         console.error("WebSocket error:", error);
       };
@@ -67,17 +69,19 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
           connect();
         }, 3000);
       };
-
       ws.current = socket;
     } catch (error) {
       console.error("Failed to connect:", error);
     }
-  }, []);
+  }, [roomId]);
 
+  useEffect(() => {
+    setMessages([])
+  }, [roomId])
   const sendMessage = useCallback((msg: string) => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      console.warn("No token found");
+    if (!token || !roomId) {
+      console.warn("Missing token or roomId");
       return;
     }
 
@@ -85,13 +89,17 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`, 
+        "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify({ text: msg }),
+      body: JSON.stringify({
+        text: msg,
+        room_id: roomId,
+      }),
     }).catch((error) => {
       console.error("Failed to send message:", error);
     });
-  }, []);
+  }, [roomId]);
+
 
 
   useEffect(() => {

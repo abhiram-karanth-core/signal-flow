@@ -11,6 +11,7 @@ var (
 	// MessagesColumns holds the columns for the "messages" table.
 	MessagesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
+		{Name: "room_id", Type: field.TypeString},
 		{Name: "username", Type: field.TypeString},
 		{Name: "text", Type: field.TypeString},
 		{Name: "created_at", Type: field.TypeTime},
@@ -20,10 +21,18 @@ var (
 		Name:       "messages",
 		Columns:    MessagesColumns,
 		PrimaryKey: []*schema.Column{MessagesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "message_room_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MessagesColumns[1], MessagesColumns[4]},
+			},
+		},
 	}
 	// UsersListsColumns holds the columns for the "users_lists" table.
 	UsersListsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
+		{Name: "room_id", Type: field.TypeString},
 		{Name: "username", Type: field.TypeString, Unique: true},
 		{Name: "email", Type: field.TypeString, Unique: true},
 		{Name: "password", Type: field.TypeString},

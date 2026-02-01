@@ -263,12 +263,12 @@ func (_q *MessageQuery) Clone() *MessageQuery {
 // Example:
 //
 //	var v []struct {
-//		Username string `json:"username,omitempty"`
+//		RoomID string `json:"room_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Message.Query().
-//		GroupBy(message.FieldUsername).
+//		GroupBy(message.FieldRoomID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *MessageQuery) GroupBy(field string, fields ...string) *MessageGroupBy {
@@ -286,11 +286,11 @@ func (_q *MessageQuery) GroupBy(field string, fields ...string) *MessageGroupBy 
 // Example:
 //
 //	var v []struct {
-//		Username string `json:"username,omitempty"`
+//		RoomID string `json:"room_id,omitempty"`
 //	}
 //
 //	client.Message.Query().
-//		Select(message.FieldUsername).
+//		Select(message.FieldRoomID).
 //		Scan(ctx, &v)
 func (_q *MessageQuery) Select(fields ...string) *MessageSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

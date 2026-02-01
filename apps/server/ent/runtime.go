@@ -17,16 +17,20 @@ import (
 func init() {
 	messageFields := schema.Message{}.Fields()
 	_ = messageFields
+	// messageDescRoomID is the schema descriptor for room_id field.
+	messageDescRoomID := messageFields[1].Descriptor()
+	// message.RoomIDValidator is a validator for the "room_id" field. It is called by the builders before save.
+	message.RoomIDValidator = messageDescRoomID.Validators[0].(func(string) error)
 	// messageDescUsername is the schema descriptor for username field.
-	messageDescUsername := messageFields[1].Descriptor()
+	messageDescUsername := messageFields[2].Descriptor()
 	// message.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
 	message.UsernameValidator = messageDescUsername.Validators[0].(func(string) error)
 	// messageDescText is the schema descriptor for text field.
-	messageDescText := messageFields[2].Descriptor()
+	messageDescText := messageFields[3].Descriptor()
 	// message.TextValidator is a validator for the "text" field. It is called by the builders before save.
 	message.TextValidator = messageDescText.Validators[0].(func(string) error)
 	// messageDescCreatedAt is the schema descriptor for created_at field.
-	messageDescCreatedAt := messageFields[3].Descriptor()
+	messageDescCreatedAt := messageFields[4].Descriptor()
 	// message.DefaultCreatedAt holds the default value on creation for the created_at field.
 	message.DefaultCreatedAt = messageDescCreatedAt.Default.(func() time.Time)
 	// messageDescID is the schema descriptor for id field.
@@ -35,16 +39,20 @@ func init() {
 	message.DefaultID = messageDescID.Default.(func() uuid.UUID)
 	userslistFields := schema.UsersList{}.Fields()
 	_ = userslistFields
+	// userslistDescRoomID is the schema descriptor for room_id field.
+	userslistDescRoomID := userslistFields[1].Descriptor()
+	// userslist.RoomIDValidator is a validator for the "room_id" field. It is called by the builders before save.
+	userslist.RoomIDValidator = userslistDescRoomID.Validators[0].(func(string) error)
 	// userslistDescUsername is the schema descriptor for username field.
-	userslistDescUsername := userslistFields[1].Descriptor()
+	userslistDescUsername := userslistFields[2].Descriptor()
 	// userslist.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
 	userslist.UsernameValidator = userslistDescUsername.Validators[0].(func(string) error)
 	// userslistDescEmail is the schema descriptor for email field.
-	userslistDescEmail := userslistFields[2].Descriptor()
+	userslistDescEmail := userslistFields[3].Descriptor()
 	// userslist.EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	userslist.EmailValidator = userslistDescEmail.Validators[0].(func(string) error)
 	// userslistDescPassword is the schema descriptor for password field.
-	userslistDescPassword := userslistFields[3].Descriptor()
+	userslistDescPassword := userslistFields[4].Descriptor()
 	// userslist.PasswordValidator is a validator for the "password" field. It is called by the builders before save.
 	userslist.PasswordValidator = userslistDescPassword.Validators[0].(func(string) error)
 	// userslistDescID is the schema descriptor for id field.

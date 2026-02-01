@@ -1,89 +1,95 @@
 package main
-import "github.com/redis/go-redis/v9"
+
 import (
 	"context"
 	"errors"
-	"strings"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"server/ent"
+	"strings"
 	"sync"
 	"time"
-	"github.com/joho/godotenv"
-	"golang.org/x/time/rate"
-	"os"
+
 	"github.com/coder/websocket"
-	"server/ent"
-	_ "github.com/lib/pq"
-	"server/ent/userslist"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
+
 	"encoding/json"
-	"github.com/golang-jwt/jwt/v5"
+	"server/ent/message"
+	"server/ent/userslist"
 	"server/models"
 
+	"github.com/golang-jwt/jwt/v5"
+	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
+
 type chatServer struct {
 	subscriberMessageBuffer int
-	publishLimiter *rate.Limiter
-	logf func(f string, v ...any)
-	serveMux http.ServeMux
+	publishLimiter          *rate.Limiter
+	logf                    func(f string, v ...any)
+	serveMux                http.ServeMux
 
 	subscribersMu sync.Mutex
-	subscribers   map[*subscriber]struct{}
-    redisClient  *redis.Client
-    redisSub     *redis.PubSub
-	db 		 *ent.Client
-	producer *KafkaProducer
+	subscribers   map[string]map[*subscriber]struct{}
+	redisClient   *redis.Client
+	redisSub      *redis.PubSub
+	db            *ent.Client
+	producer      *KafkaProducer
 }
-
 
 func (cs *chatServer) listenRedis() {
-    ch := cs.redisSub.Channel()
-    for msg := range ch {
+	ch := cs.redisSub.Channel()
+	for msg := range ch {
 		cs.logf("received message from Redis: %s", msg.Payload)
-        cs.publish([]byte(msg.Payload)) // Reuse existing in-memory broadcast
-    }
+		var m models.ChatMessage
+		json.Unmarshal([]byte(msg.Payload), &m)
+		cs.publish(m.RoomID, []byte(msg.Payload))
+	}
 }
+
 // newChatServer constructs a chatServer with the defaults.
 func newChatServer() *chatServer {
-    client, sub := SetupRedisClient()
-	 // Load DSN
-    _ = godotenv.Load()
-    dsn := os.Getenv("dsn")
-    db, err := ent.Open("postgres", dsn)
-    if err != nil {
-        log.Fatalf("failed to connect to postgres: %v", err)
-    }
+	client, sub := SetupRedisClient()
+	// Load DSN
+	_ = godotenv.Load()
+	dsn := os.Getenv("dsn")
+	db, err := ent.Open("postgres", dsn)
+	if err != nil {
+		log.Fatalf("failed to connect to postgres: %v", err)
+	}
 
-    // Run migration
-    if err := db.Schema.Create(context.Background()); err != nil {
-        log.Fatalf("failed creating schema: %v", err)
-    }
+	// Run migration
+	if err := db.Schema.Create(context.Background()); err != nil {
+		log.Fatalf("failed creating schema: %v", err)
+	}
 	prod, err := NewKafkaProducer()
-    if err != nil {
-        log.Fatalf("failed to create Kafka producer: %v", err)
-    }
+	if err != nil {
+		log.Fatalf("failed to create Kafka producer: %v", err)
+	}
 	cs := &chatServer{
 		subscriberMessageBuffer: 16,
 		logf:                    log.Printf,
-		subscribers:             make(map[*subscriber]struct{}),
+		subscribers:             make(map[string]map[*subscriber]struct{}),
 		publishLimiter:          rate.NewLimiter(rate.Every(time.Millisecond*100), 8),
-        redisClient:             client,
-        redisSub:                sub,
+		redisClient:             client,
+		redisSub:                sub,
 		db:                      db,
-		producer: 			  	 prod,
-
-
-	}       
+		producer:                prod,
+	}
 	cs.serveMux.Handle("/", http.FileServer(http.Dir(".")))
 	cs.serveMux.HandleFunc("/subscribe", cs.subscribeHandler)
 	cs.serveMux.HandleFunc("/publish", cs.publishHandler)
 	cs.serveMux.HandleFunc("/signup", cs.signupHandler)
 	cs.serveMux.HandleFunc("/login", cs.loginHandler)
 
-    go cs.listenRedis()
+	go cs.listenRedis()
 	return cs
 }
+
 type subscriber struct {
 	msgs      chan []byte
 	closeSlow func()
@@ -115,87 +121,93 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (cs *chatServer) consumeToRedis() {
-    consumer, err := NewKafkaConsumer("redis-consumer-v2")
-    if err != nil {
-        log.Fatalf("failed to create Kafka consumer: %v", err)
-    }
-    defer consumer.reader.Close()
+	consumer, err := NewKafkaConsumer("redis-consumer-v2")
+	if err != nil {
+		log.Fatalf("failed to create Kafka consumer: %v", err)
+	}
+	defer consumer.reader.Close()
+	ctx := context.Background()
 
-    ctx := context.Background()
-    err = consumer.Consume(ctx, func(msg string) error {
-        log.Printf("Kafka → Redis: %s", msg)
-        return cs.redisClient.Publish(ctx, "my-channel", msg).Err()
-    })
-    // if err != nil { // never reaches here because, if above "return" gave an error, then from kafka.go
-    //     log.Printf("consumer error: %v", err)  // log.Println("handler error:", err)
-    // }										// this will be executed
+	err = consumer.Consume(ctx, func(msg string) error {
+		log.Printf("Kafka → Redis: %s", msg)
+		var m models.ChatMessage
+		if err := json.Unmarshal([]byte(msg), &m); err != nil {
+			log.Printf("redis publish unmarshal error: %v", err)
+			return nil
+		}
+		channel := "room:" + m.RoomID
+		return cs.redisClient.Publish(ctx, channel, msg).Err()
+	})
+	// if err != nil { // never reaches here because, if above "return" gave an error, then from kafka.go
+	//     log.Printf("consumer error: %v", err)  // log.Println("handler error:", err)
+	// }										// this will be executed
 }
 
 func (cs *chatServer) consumeToDB() {
-    consumer, err := NewKafkaConsumer("db-consumer-v2")
-    if err != nil {
-        log.Fatalf("failed to create Kafka consumer: %v", err)
-    }
-    defer consumer.reader.Close()
-    ctx := context.Background()
-    err = consumer.Consume(ctx, func(msg string) error {
+	consumer, err := NewKafkaConsumer("db-consumer-v2")
+	if err != nil {
+		log.Fatalf("failed to create Kafka consumer: %v", err)
+	}
+	defer consumer.reader.Close()
+	ctx := context.Background()
+	err = consumer.Consume(ctx, func(msg string) error {
 		var m models.ChatMessage
-		if err := json.Unmarshal([]byte(msg),&m); err!= nil{
-			log.Printf("invalid message format: %v",err)
+		if err := json.Unmarshal([]byte(msg), &m); err != nil {
+			log.Printf("invalid message format: %v", err)
 			return nil
 		}
-        log.Printf("Kafka → DB: %+v", m)
-        _, dbErr := cs.db.Message.
-            Create().
-            SetText(m.Text).
+		log.Printf("Kafka → DB: %+v", m)
+		_, dbErr := cs.db.Message.
+			Create().
+			SetText(m.Text).
+			SetRoomID(m.RoomID).
 			SetUsername(m.Username).
 			SetCreatedAt(m.CreatedAt).
-            Save(ctx)
-        if dbErr != nil {
-            log.Printf("failed saving message: %v", dbErr)
-        }
-        return nil
-    })
-    if err != nil {
-        log.Printf("consumer error: %v", err)
-    }
+			Save(ctx)
+		if dbErr != nil {
+			log.Printf("failed saving message: %v", dbErr)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("consumer error: %v", err)
+	}
 }
 
+func (cs *chatServer) extractUsernameFromJWT(r *http.Request) (string, error) {
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		return "", errors.New("missing authorization header")
+	}
 
-func (cs *chatServer)extractUsernameFromJWT(r *http.Request) (string, error) {
-    auth := r.Header.Get("Authorization")
-    if auth == "" {
-        return "", errors.New("missing authorization header")
-    }
+	tokenStr := strings.TrimPrefix(auth, "Bearer ")
 
-    tokenStr := strings.TrimPrefix(auth, "Bearer ")
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		return "", errors.New("invalid token")
+	}
 
-    token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-        return jwtSecret, nil
-    })
-    if err != nil || !token.Valid {
-        return "", errors.New("invalid token")
-    }
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", errors.New("invalid claims")
+	}
 
-    claims, ok := token.Claims.(jwt.MapClaims)
-    if !ok {
-        return "", errors.New("invalid claims")
-    }
+	email, ok := claims["email"].(string)
+	if !ok {
+		return "", errors.New("email missing in token")
+	}
 
-    email, ok := claims["email"].(string)
-    if !ok {
-        return "", errors.New("email missing in token")
-    }
+	user, err := cs.db.UsersList.
+		Query().
+		Where(userslist.EmailEQ(email)).
+		Only(context.Background())
+	if err != nil {
+		return "", err
+	}
 
-    user, err := cs.db.UsersList.
-        Query().
-        Where(userslist.EmailEQ(email)).
-        Only(context.Background())
-    if err != nil {
-        return "", err
-    }
-
-    return user.Username, nil
+	return user.Username, nil
 }
 
 func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
@@ -205,35 +217,42 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
-	var req struct{
-		Text string `json:"text"`
+	var req struct {
+		Text   string `json:"text"`
+		RoomID string `json:"room_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err!=nil{
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	if req.Text ==""{
+	if req.RoomID == "" {
+		http.Error(w, "room_id required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Text == "" {
 		http.Error(w, "message cannot be empty", http.StatusBadRequest)
 		return
 	}
 	username, err := cs.extractUsernameFromJWT(r)
-	if err!= nil {
-		http.Error (w, "unauthorized", http.StatusUnauthorized)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	log.Println("🟢 JWT OK, username =", username)
 
 	msg := models.ChatMessage{
-		Username: username,
-		Text: req.Text,
+		Username:  username,
+		Text:      req.Text,
+		RoomID:    req.RoomID,
 		CreatedAt: time.Now(),
 	}
-	data,err := json.Marshal(msg)
-	if err!=nil{
+	data, err := json.Marshal(msg)
+	if err != nil {
 		http.Error(w, "failed to serialize the message", http.StatusInternalServerError)
 		return
 	}
-	if err := cs.producer.ProduceMessage(string(data)); err!=nil{
+	if err := cs.producer.ProduceMessage(msg.RoomID, data); err != nil {
 		http.Error(w, "failed to produce to kafka", http.StatusInternalServerError)
 		return
 	}
@@ -243,12 +262,14 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-
-
 func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 	var mu sync.Mutex
 	var c *websocket.Conn
 	var closed bool
+	roomID := r.URL.Query().Get("room_id")
+	if roomID == "" {
+		return errors.New("room_id is required")
+	}
 	s := &subscriber{
 		msgs: make(chan []byte, cs.subscriberMessageBuffer),
 		closeSlow: func() {
@@ -260,8 +281,8 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 			}
 		},
 	}
-	cs.addSubscriber(s)
-	defer cs.deleteSubscriber(s)
+	cs.addSubscriber(roomID, s)
+	defer cs.deleteSubscriber(roomID, s)
 
 	c2, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		// Allow all origins for development; tighten in production
@@ -279,30 +300,31 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 	mu.Unlock()
 	defer c.CloseNow()
 	ctx := c.CloseRead(context.Background())
-    messages, err := cs.db.Message.  // **NEW: Send historical messages from DB**
-        Query().
-        Order(ent.Asc("created_at")).  // or use a created_at field
-        Limit(100).            // last 100 messages
-        All(ctx)
-    if err != nil {
-        cs.logf("failed to fetch messages: %v", err)
-    } else {
-        for _, msg := range messages {
-	cm := models.ChatMessage{
-		ID:        msg.ID,
-		Username:  msg.Username,
-		Text:      msg.Text,
-		CreatedAt: msg.CreatedAt,
+	messages, err := cs.db.Message. //  Send historical messages from DB
+					Query().
+					Where(message.RoomIDEQ(roomID)).
+					Order(ent.Asc("created_at")).
+					Limit(100). // last 100 messages
+					All(ctx)
+	if err != nil {
+		cs.logf("failed to fetch messages: %v", err)
+	} else {
+		for _, msg := range messages {
+			cm := models.ChatMessage{
+				ID:        msg.ID,
+				Username:  msg.Username,
+				Text:      msg.Text,
+				CreatedAt: msg.CreatedAt,
+			}
+
+			data, _ := json.Marshal(cm)
+
+			if err := writeTimeout(ctx, time.Second*5, c, data); err != nil {
+				return err
+			}
+		}
+
 	}
-
-	data, _ := json.Marshal(cm)
-
-	if err := writeTimeout(ctx, time.Second*5, c, data); err != nil {
-		return err
-	}
-}
-
-    }
 	for {
 		select {
 		case msg := <-s.msgs:
@@ -315,11 +337,11 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 }
-func (cs *chatServer) publish(msg []byte) {   // publish publishes the msg to all subscribers.
-	cs.subscribersMu.Lock()// It never blocks and so messages to slow subscribers
+func (cs *chatServer) publish(roomID string, msg []byte) { // publish publishes the msg to all subscribers.
+	cs.subscribersMu.Lock()         // It never blocks and so messages to slow subscribers
 	defer cs.subscribersMu.Unlock() // are dropped.
 	cs.publishLimiter.Wait(context.Background())
-	for s := range cs.subscribers {
+	for s := range cs.subscribers[roomID] {
 		select {
 		case s.msgs <- msg:
 		default:
@@ -327,21 +349,32 @@ func (cs *chatServer) publish(msg []byte) {   // publish publishes the msg to al
 		}
 	}
 }
-func (cs *chatServer) addSubscriber(s *subscriber) {
+func (cs *chatServer) addSubscriber(roomID string, s *subscriber) {
 	cs.subscribersMu.Lock()
-	cs.subscribers[s] = struct{}{}
-	cs.subscribersMu.Unlock()
+	defer cs.subscribersMu.Unlock()
+
+	if cs.subscribers[roomID] == nil {
+		cs.subscribers[roomID] = make(map[*subscriber]struct{})
+	}
+	cs.subscribers[roomID][s] = struct{}{}
 }
-func (cs *chatServer) deleteSubscriber(s *subscriber) {
+
+func (cs *chatServer) deleteSubscriber(roomID string, s *subscriber) {
 	cs.subscribersMu.Lock()
-	delete(cs.subscribers, s)
-	cs.subscribersMu.Unlock()
+	defer cs.subscribersMu.Unlock()
+
+	delete(cs.subscribers[roomID], s)
+	if len(cs.subscribers[roomID]) == 0 {
+		delete(cs.subscribers, roomID)
+	}
 }
+
 func writeTimeout(ctx context.Context, timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return c.Write(ctx, websocket.MessageText, msg)
 }
+
 // signupHandler handles new user registration
 func (cs *chatServer) signupHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -440,11 +473,10 @@ func (cs *chatServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 func main() {
 	cs := newChatServer()
-    go cs.consumeToRedis()
-    go cs.consumeToDB()
+	go cs.consumeToRedis()
+	go cs.consumeToDB()
 	log.Printf("starting server on :8888")
 	if err := http.ListenAndServe(":8888", cs); err != nil {
 		log.Fatalf("server exited: %v", err)

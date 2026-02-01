@@ -20,6 +20,12 @@ type UsersListCreate struct {
 	hooks    []Hook
 }
 
+// SetRoomID sets the "room_id" field.
+func (_c *UsersListCreate) SetRoomID(v string) *UsersListCreate {
+	_c.mutation.SetRoomID(v)
+	return _c
+}
+
 // SetUsername sets the "username" field.
 func (_c *UsersListCreate) SetUsername(v string) *UsersListCreate {
 	_c.mutation.SetUsername(v)
@@ -95,6 +101,14 @@ func (_c *UsersListCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *UsersListCreate) check() error {
+	if _, ok := _c.mutation.RoomID(); !ok {
+		return &ValidationError{Name: "room_id", err: errors.New(`ent: missing required field "UsersList.room_id"`)}
+	}
+	if v, ok := _c.mutation.RoomID(); ok {
+		if err := userslist.RoomIDValidator(v); err != nil {
+			return &ValidationError{Name: "room_id", err: fmt.Errorf(`ent: validator failed for field "UsersList.room_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Username(); !ok {
 		return &ValidationError{Name: "username", err: errors.New(`ent: missing required field "UsersList.username"`)}
 	}
@@ -153,6 +167,10 @@ func (_c *UsersListCreate) createSpec() (*UsersList, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
+	}
+	if value, ok := _c.mutation.RoomID(); ok {
+		_spec.SetField(userslist.FieldRoomID, field.TypeString, value)
+		_node.RoomID = value
 	}
 	if value, ok := _c.mutation.Username(); ok {
 		_spec.SetField(userslist.FieldUsername, field.TypeString, value)

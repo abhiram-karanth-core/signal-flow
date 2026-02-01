@@ -21,6 +21,12 @@ type MessageCreate struct {
 	hooks    []Hook
 }
 
+// SetRoomID sets the "room_id" field.
+func (_c *MessageCreate) SetRoomID(v string) *MessageCreate {
+	_c.mutation.SetRoomID(v)
+	return _c
+}
+
 // SetUsername sets the "username" field.
 func (_c *MessageCreate) SetUsername(v string) *MessageCreate {
 	_c.mutation.SetUsername(v)
@@ -108,6 +114,14 @@ func (_c *MessageCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *MessageCreate) check() error {
+	if _, ok := _c.mutation.RoomID(); !ok {
+		return &ValidationError{Name: "room_id", err: errors.New(`ent: missing required field "Message.room_id"`)}
+	}
+	if v, ok := _c.mutation.RoomID(); ok {
+		if err := message.RoomIDValidator(v); err != nil {
+			return &ValidationError{Name: "room_id", err: fmt.Errorf(`ent: validator failed for field "Message.room_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Username(); !ok {
 		return &ValidationError{Name: "username", err: errors.New(`ent: missing required field "Message.username"`)}
 	}
@@ -161,6 +175,10 @@ func (_c *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
+	}
+	if value, ok := _c.mutation.RoomID(); ok {
+		_spec.SetField(message.FieldRoomID, field.TypeString, value)
+		_node.RoomID = value
 	}
 	if value, ok := _c.mutation.Username(); ok {
 		_spec.SetField(message.FieldUsername, field.TypeString, value)

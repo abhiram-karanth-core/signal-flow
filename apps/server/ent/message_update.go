@@ -28,6 +28,20 @@ func (_u *MessageUpdate) Where(ps ...predicate.Message) *MessageUpdate {
 	return _u
 }
 
+// SetRoomID sets the "room_id" field.
+func (_u *MessageUpdate) SetRoomID(v string) *MessageUpdate {
+	_u.mutation.SetRoomID(v)
+	return _u
+}
+
+// SetNillableRoomID sets the "room_id" field if the given value is not nil.
+func (_u *MessageUpdate) SetNillableRoomID(v *string) *MessageUpdate {
+	if v != nil {
+		_u.SetRoomID(*v)
+	}
+	return _u
+}
+
 // SetUsername sets the "username" field.
 func (_u *MessageUpdate) SetUsername(v string) *MessageUpdate {
 	_u.mutation.SetUsername(v)
@@ -104,6 +118,11 @@ func (_u *MessageUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *MessageUpdate) check() error {
+	if v, ok := _u.mutation.RoomID(); ok {
+		if err := message.RoomIDValidator(v); err != nil {
+			return &ValidationError{Name: "room_id", err: fmt.Errorf(`ent: validator failed for field "Message.room_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := message.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "Message.username": %w`, err)}
@@ -128,6 +147,9 @@ func (_u *MessageUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.RoomID(); ok {
+		_spec.SetField(message.FieldRoomID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(message.FieldUsername, field.TypeString, value)
@@ -156,6 +178,20 @@ type MessageUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *MessageMutation
+}
+
+// SetRoomID sets the "room_id" field.
+func (_u *MessageUpdateOne) SetRoomID(v string) *MessageUpdateOne {
+	_u.mutation.SetRoomID(v)
+	return _u
+}
+
+// SetNillableRoomID sets the "room_id" field if the given value is not nil.
+func (_u *MessageUpdateOne) SetNillableRoomID(v *string) *MessageUpdateOne {
+	if v != nil {
+		_u.SetRoomID(*v)
+	}
+	return _u
 }
 
 // SetUsername sets the "username" field.
@@ -247,6 +283,11 @@ func (_u *MessageUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *MessageUpdateOne) check() error {
+	if v, ok := _u.mutation.RoomID(); ok {
+		if err := message.RoomIDValidator(v); err != nil {
+			return &ValidationError{Name: "room_id", err: fmt.Errorf(`ent: validator failed for field "Message.room_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := message.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "Message.username": %w`, err)}
@@ -288,6 +329,9 @@ func (_u *MessageUpdateOne) sqlSave(ctx context.Context) (_node *Message, err er
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.RoomID(); ok {
+		_spec.SetField(message.FieldRoomID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(message.FieldUsername, field.TypeString, value)

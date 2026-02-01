@@ -17,6 +17,8 @@ type UsersList struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID uuid.UUID `json:"id,omitempty"`
+	// RoomID holds the value of the "room_id" field.
+	RoomID string `json:"room_id,omitempty"`
 	// Username holds the value of the "username" field.
 	Username string `json:"username,omitempty"`
 	// Email holds the value of the "email" field.
@@ -31,7 +33,7 @@ func (*UsersList) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case userslist.FieldUsername, userslist.FieldEmail, userslist.FieldPassword:
+		case userslist.FieldRoomID, userslist.FieldUsername, userslist.FieldEmail, userslist.FieldPassword:
 			values[i] = new(sql.NullString)
 		case userslist.FieldID:
 			values[i] = new(uuid.UUID)
@@ -55,6 +57,12 @@ func (_m *UsersList) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value != nil {
 				_m.ID = *value
+			}
+		case userslist.FieldRoomID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field room_id", values[i])
+			} else if value.Valid {
+				_m.RoomID = value.String
 			}
 		case userslist.FieldUsername:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -110,6 +118,9 @@ func (_m *UsersList) String() string {
 	var builder strings.Builder
 	builder.WriteString("UsersList(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("room_id=")
+	builder.WriteString(_m.RoomID)
+	builder.WriteString(", ")
 	builder.WriteString("username=")
 	builder.WriteString(_m.Username)
 	builder.WriteString(", ")
