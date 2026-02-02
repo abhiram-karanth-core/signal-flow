@@ -15,22 +15,29 @@ The system follows an event-driven, distributed architecture.
 - Kafka:
   Acts as the durable message backbone and decouples producers and consumers.
 - Redis:
-  Used as a low-latency fan-out layer for real-time message delivery.
+  Used as a low-latency fan-out layer. Each WebSocket connection subscribes
+  to a Redis channel scoped by room_id.
 - PostgreSQL:
   Serves as the source of truth for message persistence and user data.
 - WebSocket Layer:
-  Pushes messages to connected clients in real time.
+  Delivers messages to individual clients. Fan-out is handled by Redis,
+  not by the WebSocket server.
 - Next.js:
   Client-side rendering and real-time UI updates.
+- Fan-out is handled entirely by Redis. The server does not maintain
+  in-memory client lists or routing tables, unlike earlier in-memory
+  broadcast implementations.(previous version)
+
 
 
 ## Design Decisions
 
 - Kafka was chosen to ensure durability and replayability of messages.
-- Redis is used instead of Kafka consumers directly pushing to WebSockets
-  to minimize latency and isolate real-time delivery failures.
+- Redis is used as the fan-out layer so that each WebSocket connection
+  independently receives messages for its subscribed room.
 - HTTP is used for publish to keep the producer side stateless and scalable.
-- WebSockets are used only for subscriptions to maintain persistent delivery channels.
+- WebSockets are used only for delivery. Each connected client maintains
+  a single WebSocket connection subscribed to a Redis room channel.
 - Database writes happen asynchronously to avoid blocking real-time delivery.
 
 ## Fault Tolerance
@@ -46,7 +53,8 @@ The system follows an event-driven, distributed architecture.
 
 - Stateless Go servers allow horizontal scaling.
 - Kafka partitions enable parallel message consumption.
-- Redis Pub/Sub supports fast fan-out to multiple servers.
+- Redis Pub/Sub performs room-based fan-out to all subscribed WebSocket connections
+  across server instances.
 - WebSocket connections are distributed across server instances.
 
 
@@ -68,10 +76,9 @@ HTTP publish
 → (parallel)
      → Kafka → DB
      → Kafka → Redis
-→ Redis → server
-→ server → WebSocket clients    
-
-
+→ Redis (room-based Pub/Sub)
+→ WebSocket connections (one per client)
+ 
 ## Deployment Notes
 
 # Kafka, Redis, and PostgreSQL are managed using Aiven
