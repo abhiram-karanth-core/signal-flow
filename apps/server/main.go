@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 
@@ -227,9 +228,15 @@ func (cs *chatServer) consumeToDB() {
 			log.Printf("invalid message format: %v", err)
 			return nil
 		}
+		msgUUID, err := uuid.Parse(m.ID)
+		if err != nil {
+			log.Printf("invalid UUID: %v", err)
+			return nil
+		}
 		log.Printf("Kafka → DB: %+v", m)
 		_, dbErr := cs.db.Message.
 			Create().
+			SetID(msgUUID).
 			SetText(m.Text).
 			SetRoomID(m.RoomID).
 			SetUsername(m.Username).
@@ -312,11 +319,14 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Println("🟢 JWT OK, username =", username)
 
+	msgID := uuid.New()
+	now := time.Now()
 	msg := models.ChatMessage{
+		ID:        msgID.String(),
 		Username:  username,
 		Text:      req.Text,
 		RoomID:    req.RoomID,
-		CreatedAt: time.Now(),
+		CreatedAt: now,
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -401,7 +411,7 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 		for _, msg := range messages {
 
 			cm := models.ChatMessage{
-				ID:        msg.ID,
+				ID:        msg.ID.String(),
 				Username:  msg.Username,
 				Text:      msg.Text,
 				CreatedAt: msg.CreatedAt,

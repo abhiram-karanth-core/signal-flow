@@ -10,7 +10,7 @@ import (
 var (
 	// MessagesColumns holds the columns for the "messages" table.
 	MessagesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
+		{Name: "id", Type: field.TypeUUID, Unique: true},
 		{Name: "room_id", Type: field.TypeString},
 		{Name: "username", Type: field.TypeString},
 		{Name: "text", Type: field.TypeString},

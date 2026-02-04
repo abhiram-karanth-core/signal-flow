@@ -33,10 +33,6 @@ func init() {
 	messageDescCreatedAt := messageFields[4].Descriptor()
 	// message.DefaultCreatedAt holds the default value on creation for the created_at field.
 	message.DefaultCreatedAt = messageDescCreatedAt.Default.(func() time.Time)
-	// messageDescID is the schema descriptor for id field.
-	messageDescID := messageFields[0].Descriptor()
-	// message.DefaultID holds the default value on creation for the id field.
-	message.DefaultID = messageDescID.Default.(func() uuid.UUID)
 	userslistFields := schema.UsersList{}.Fields()
 	_ = userslistFields
 	// userslistDescUsername is the schema descriptor for username field.

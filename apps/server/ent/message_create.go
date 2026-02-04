@@ -59,14 +59,6 @@ func (_c *MessageCreate) SetID(v uuid.UUID) *MessageCreate {
 	return _c
 }
 
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *MessageCreate) SetNillableID(v *uuid.UUID) *MessageCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
-	return _c
-}
-
 // Mutation returns the MessageMutation object of the builder.
 func (_c *MessageCreate) Mutation() *MessageMutation {
 	return _c.mutation
@@ -105,10 +97,6 @@ func (_c *MessageCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := message.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
-	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := message.DefaultID()
-		_c.mutation.SetID(v)
 	}
 }
 
