@@ -69,7 +69,7 @@ func (r *Room) run() {
 				r.hub.mu.Lock()
 				delete(r.hub.rooms, r.name)
 				r.hub.mu.Unlock()
-				return 
+				return
 			}
 
 		case msg := <-r.broadcast:
@@ -343,9 +343,10 @@ func (cs *chatServer) startRedisListener() {
 
 			roomID := strings.TrimPrefix(msg.Channel, "room:")
 			data := []byte(msg.Payload)
-			go func() {
+			go func(roomID string, data []byte) {
 				cs.hub.Broadcast(roomID, data)
-			}()
+			}(roomID, data)
+
 		}
 	}()
 }
