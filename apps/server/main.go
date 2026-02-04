@@ -396,7 +396,8 @@ func (cs *chatServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	//  send the token as json response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"token": signedToken,
+		"token":    signedToken,
+		"username": user.Username,
 	})
 }
 

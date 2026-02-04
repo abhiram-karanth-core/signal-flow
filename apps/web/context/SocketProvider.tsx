@@ -5,13 +5,13 @@ interface WebSocketProviderProps {
   roomId: string
   children?: React.ReactNode;
 }
-interface IWebSocketContext {
+export interface IWebSocketContext {
   sendMessage: (msg: string) => void;
   messages: ChatMessage[];
   isConnected: boolean;
 }
 
-type ChatMessage = {
+export type ChatMessage = {
   id?: string
   username: string
   text: string
