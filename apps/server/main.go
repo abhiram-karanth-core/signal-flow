@@ -33,43 +33,99 @@ type chatServer struct {
 	producer    *KafkaProducer
 	hub         *Hub
 }
+type Client struct {
+	conn *websocket.Conn
+	send chan []byte
+}
+type Room struct {
+	name      string
+	hub       *Hub
+	clients   map[*Client]bool
+	join      chan *Client
+	leave     chan *Client
+	broadcast chan []byte
+}
 
 type Hub struct {
-	rooms map[string]map[*websocket.Conn]bool
+	rooms map[string]*Room
 	mu    sync.RWMutex
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		rooms: make(map[string]map[*websocket.Conn]bool),
+		rooms: make(map[string]*Room),
 	}
 }
-func (h *Hub) Join(room string, c *websocket.Conn) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (r *Room) run() {
+	for {
+		select {
+		case c := <-r.join:
+			r.clients[c] = true
 
-	if h.rooms[room] == nil {
-		h.rooms[room] = make(map[*websocket.Conn]bool)
+		case c := <-r.leave:
+			delete(r.clients, c)
+			close(c.send)
+			if len(r.clients) == 0 {
+				r.hub.mu.Lock()
+				delete(r.hub.rooms, r.name)
+				r.hub.mu.Unlock()
+				return 
+			}
+
+		case msg := <-r.broadcast:
+			for client := range r.clients {
+				select {
+				case client.send <- msg:
+				default:
+				}
+			}
+		}
 	}
-	h.rooms[room][c] = true
 }
 
-func (h *Hub) Leave(room string, c *websocket.Conn) {
+func (h *Hub) Join(roomName string, c *websocket.Conn) *Client {
+
+	client := &Client{
+		conn: c,
+		send: make(chan []byte, 64),
+	}
+
 	h.mu.Lock()
-	defer h.mu.Unlock()
+	room := h.rooms[roomName]
+	if room == nil {
+		room = &Room{
+			name:      roomName,
+			clients:   make(map[*Client]bool),
+			join:      make(chan *Client),
+			leave:     make(chan *Client),
+			broadcast: make(chan []byte, 256),
+			hub:       h,
+		}
+		h.rooms[roomName] = room
+		go room.run() // ⭐ start room worker
+	}
+	h.mu.Unlock()
 
-	delete(h.rooms[room], c)
+	room.join <- client
+	return client
 }
-func (h *Hub) Broadcast(room string, data []byte) {
+func (h *Hub) Leave(roomName string, client *Client) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	room := h.rooms[roomName]
+	h.mu.RUnlock()
 
-	for c := range h.rooms[room] {
-		go func(conn *websocket.Conn) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			conn.Write(ctx, websocket.MessageText, data)
-		}(c)
+	if room != nil {
+		room.leave <- client
+	}
+}
+
+func (h *Hub) Broadcast(roomName string, data []byte) {
+	h.mu.RLock()
+	room := h.rooms[roomName]
+	h.mu.RUnlock()
+
+	if room != nil {
+		room.broadcast <- data
 	}
 }
 
@@ -98,7 +154,7 @@ func newChatServer() *chatServer {
 		db:          db,
 		producer:    prod,
 		hub: &Hub{
-			rooms: make(map[string]map[*websocket.Conn]bool),
+			rooms: make(map[string]*Room),
 		},
 	}
 	cs.serveMux.Handle("/", http.FileServer(http.Dir(".")))
@@ -286,7 +342,10 @@ func (cs *chatServer) startRedisListener() {
 		for msg := range ch {
 
 			roomID := strings.TrimPrefix(msg.Channel, "room:")
-			cs.hub.Broadcast(roomID, []byte(msg.Payload))
+			data := []byte(msg.Payload)
+			go func() {
+				cs.hub.Broadcast(roomID, data)
+			}()
 		}
 	}()
 }
@@ -305,11 +364,23 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer c.CloseNow()
 
-	
-	cs.hub.Join(roomID, c)
-	defer cs.hub.Leave(roomID, c)
+	client := cs.hub.Join(roomID, c)
+	defer cs.hub.Leave(roomID, client)
 
 	ctx := context.Background()
+	go func() {
+		for msg := range client.send {
+
+			wctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+
+			err := c.Write(wctx, websocket.MessageText, msg)
+			cancel()
+
+			if err != nil {
+				return
+			}
+		}
+	}()
 
 	go func() {
 		for {
@@ -337,8 +408,10 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 
 			data, _ := json.Marshal(cm)
 
-			if err := writeTimeout(ctx, 5*time.Second, c, data); err != nil {
-				return err
+			select {
+			case client.send <- data:
+			default:
+
 			}
 		}
 	}
@@ -347,7 +420,6 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 
 	return nil
 }
-
 
 func writeTimeout(ctx context.Context, timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
