@@ -8,6 +8,7 @@ import (
 	"os"
 	"server/ent"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -30,6 +31,46 @@ type chatServer struct {
 	redisClient *redis.Client
 	db          *ent.Client
 	producer    *KafkaProducer
+	hub         *Hub
+}
+
+type Hub struct {
+	rooms map[string]map[*websocket.Conn]bool
+	mu    sync.RWMutex
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		rooms: make(map[string]map[*websocket.Conn]bool),
+	}
+}
+func (h *Hub) Join(room string, c *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.rooms[room] == nil {
+		h.rooms[room] = make(map[*websocket.Conn]bool)
+	}
+	h.rooms[room][c] = true
+}
+
+func (h *Hub) Leave(room string, c *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	delete(h.rooms[room], c)
+}
+func (h *Hub) Broadcast(room string, data []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	for c := range h.rooms[room] {
+		go func(conn *websocket.Conn) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			conn.Write(ctx, websocket.MessageText, data)
+		}(c)
+	}
 }
 
 // newChatServer constructs a chatServer with the defaults.
@@ -56,6 +97,9 @@ func newChatServer() *chatServer {
 		redisClient: client,
 		db:          db,
 		producer:    prod,
+		hub: &Hub{
+			rooms: make(map[string]map[*websocket.Conn]bool),
+		},
 	}
 	cs.serveMux.Handle("/", http.FileServer(http.Dir(".")))
 	cs.serveMux.HandleFunc("/subscribe", cs.subscribeHandler)
@@ -232,13 +276,27 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 
 }
+func (cs *chatServer) startRedisListener() {
+	ctx := context.Background()
 
+	pubsub := cs.redisClient.PSubscribe(ctx, "room:*")
+	ch := pubsub.Channel()
+
+	go func() {
+		for msg := range ch {
+
+			roomID := strings.TrimPrefix(msg.Channel, "room:")
+			cs.hub.Broadcast(roomID, []byte(msg.Payload))
+		}
+	}()
+}
 func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 
 	roomID := r.URL.Query().Get("room_id")
 	if roomID == "" {
 		return errors.New("room_id is required")
 	}
+
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
 	})
@@ -247,17 +305,29 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer c.CloseNow()
 
-	ctx := c.CloseRead(context.Background())
-	messages, err := cs.db.Message. //  Send historical messages from DB
-					Query().
-					Where(message.RoomIDEQ(roomID)).
-					Order(ent.Asc("created_at")).
-					Limit(100). // last 100 messages
-					All(ctx)
-	if err != nil {
-		cs.logf("failed to fetch messages: %v", err)
-	} else {
+	
+	cs.hub.Join(roomID, c)
+	defer cs.hub.Leave(roomID, c)
+
+	ctx := context.Background()
+
+	go func() {
+		for {
+			if _, _, err := c.Read(ctx); err != nil {
+				return
+			}
+		}
+	}()
+	messages, err := cs.db.Message.
+		Query().
+		Where(message.RoomIDEQ(roomID)).
+		Order(ent.Asc("created_at")).
+		Limit(100).
+		All(ctx)
+
+	if err == nil {
 		for _, msg := range messages {
+
 			cm := models.ChatMessage{
 				ID:        msg.ID,
 				Username:  msg.Username,
@@ -267,34 +337,17 @@ func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 
 			data, _ := json.Marshal(cm)
 
-			if err := writeTimeout(ctx, time.Second*5, c, data); err != nil {
+			if err := writeTimeout(ctx, 5*time.Second, c, data); err != nil {
 				return err
 			}
 		}
-
-	}
-	pubsub := cs.redisClient.Subscribe(ctx, "room:"+roomID)
-	defer pubsub.Close()
-
-	ch := pubsub.Channel()
-
-	for {
-		select {
-		case msg := <-ch:
-			if err := writeTimeout(
-				ctx,
-				time.Second*5,
-				c,
-				[]byte(msg.Payload),
-			); err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
 	}
 
+	<-r.Context().Done()
+
+	return nil
 }
+
 
 func writeTimeout(ctx context.Context, timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -405,6 +458,7 @@ func main() {
 	cs := newChatServer()
 	go cs.consumeToRedis()
 	go cs.consumeToDB()
+	cs.startRedisListener()
 	log.Printf("starting server on :8888")
 	if err := http.ListenAndServe(":8888", cs); err != nil {
 		log.Fatalf("server exited: %v", err)
